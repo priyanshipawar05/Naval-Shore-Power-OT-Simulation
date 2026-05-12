@@ -71,11 +71,10 @@ shore-power-lab/
 │   └── SETUP_GUIDE.md
 │
 ├── templates/
-│   └── index.html
+│   ├── index.html
+│   └── shore_power_scada.html
 │
 ├── screenshots/
-│
-├── docs/
 │
 ├── app.py
 ├── modbus_bridge.py
