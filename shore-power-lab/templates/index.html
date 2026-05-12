@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shore Power OT Lab — SCADA</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg:      #080c0f;
+    --panel:   #0d1318;
+    --border:  #1a2a35;
+    --accent:  #00e5ff;
+    --green:   #00ff88;
+    --yellow:  #ffd600;
+    --red:     #ff3b3b;
+    --text:    #c8dde8;
+    --dim:     #4a6572;
+    --glow:    0 0 12px rgba(0,229,255,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(90deg, #0a1520, #080c0f);
+  }
+  header h1 { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; letter-spacing: 3px; color: var(--accent); text-shadow: var(--glow); }
+  #conn-badge { font-size: 0.7rem; padding: 3px 10px; border-radius: 2px; letter-spacing: 2px; font-family: 'Orbitron', sans-serif; }
+  .conn-ok   { background: rgba(0,255,136,0.1); color: var(--green);  border: 1px solid rgba(0,255,136,0.3); }
+  .conn-err  { background: rgba(255,59,59,0.1); color: var(--red);    border: 1px solid rgba(255,59,59,0.3); }
+
+  /* ── Status bar ── */
+  #status-bar {
+    text-align: center;
+    padding: 7px;
+    font-size: 0.75rem;
+    letter-spacing: 4px;
+    font-family: 'Orbitron', sans-serif;
+    background: #050a0d;
+    border-bottom: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .sb-normal  { color: var(--green);  background: rgba(0,255,136,0.06); }
+  .sb-warning { color: var(--yellow); background: rgba(255,214,0,0.07); }
+  .sb-alarm   { color: var(--red);    background: rgba(255,59,59,0.1); animation: blink .7s infinite; }
+
+  /* Consequence banner */
+  #consequence-banner { display:none; padding:16px 24px; border-bottom:2px solid var(--red); background:rgba(255,59,59,0.07); }
+  #consequence-banner.visible { display:block; }
+  #consequence-banner.relay-trip { border-color:var(--yellow); background:rgba(255,214,0,0.05); }
+  .cons-title { font-family:'Orbitron',sans-serif; font-size:0.9rem; letter-spacing:3px; color:var(--red); margin-bottom:10px; text-shadow:0 0 14px rgba(255,59,59,0.5); animation:blink .9s infinite; }
+  .cons-title.protected { color:var(--yellow); text-shadow:0 0 14px rgba(255,214,0,0.5); animation:none; }
+  .cons-details { font-size:0.74rem; color:var(--text); line-height:2.2; }
+  .cons-tag { padding:1px 7px; border-radius:2px; font-size:0.63rem; font-family:'Orbitron',sans-serif; letter-spacing:1px; margin-right:6px; vertical-align:middle; }
+  .cons-dmg  { background:rgba(255,59,59,0.2);  color:var(--red);    border:1px solid rgba(255,59,59,0.4); }
+  .cons-warn { background:rgba(255,214,0,0.15); color:var(--yellow); border:1px solid rgba(255,214,0,0.4); }
+  .cons-ok   { background:rgba(0,255,136,0.1);  color:var(--green);  border:1px solid rgba(0,255,136,0.3); }
+  .phase-bar { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; align-items:center; font-size:0.64rem; letter-spacing:2px; color:var(--dim); font-family:'Orbitron',sans-serif; }
+  .phase-pip { width:60px; height:4px; border-radius:2px; background:#1a2a35; }
+  .phase-pip.done { background:var(--red); }
+  .phase-pip.done.ok { background:var(--yellow); }
+
+  /* Consequence banner */
+  #consequence-banner {
+    display: none;
+    padding: 18px 28px;
+    border-bottom: 2px solid var(--red);
+    background: rgba(255,59,59,0.08);
+    font-family: 'Orbitron', sans-serif;
+  }
+  #consequence-banner.visible { display: block; }
+  #consequence-banner.relay-trip { border-color: var(--yellow); background: rgba(255,214,0,0.06); }
+  .cons-title { font-size: 1rem; letter-spacing: 4px; color: var(--red); margin-bottom: 8px; text-shadow: 0 0 14px rgba(255,59,59,0.6); }
+  .cons-title.protected { color: var(--yellow); text-shadow: 0 0 14px rgba(255,214,0,0.5); }
+  .cons-details { font-size: 0.72rem; letter-spacing: 2px; color: var(--text); line-height: 2; }
+  .cons-details span { display: inline-block; margin-right: 28px; }
+  .cons-tag { padding: 2px 8px; border-radius: 2px; font-size: 0.65rem; margin-right: 6px; vertical-align: middle; }
+  .cons-dmg  { background: rgba(255,59,59,0.2);  color: var(--red);    border: 1px solid rgba(255,59,59,0.4); }
+  .cons-warn { background: rgba(255,214,0,0.15); color: var(--yellow); border: 1px solid rgba(255,214,0,0.4); }
+  .cons-ok   { background: rgba(0,255,136,0.1);  color: var(--green);  border: 1px solid rgba(0,255,136,0.3); }
+  .phase-bar { display: flex; gap: 8px; margin-top: 10px; align-items: center; font-size: 0.62rem; letter-spacing: 2px; color: var(--dim); }
+  .phase-pip { width: 80px; height: 5px; border-radius: 2px; background: #1a2a35; }
+  .phase-pip.done { background: var(--red); }
+  .phase-pip.done.ok { background: var(--yellow); }
+  @keyframes blink { 50% { opacity: 0.35; } }
+
+  /* ── Layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr 320px;
+    grid-template-rows: auto auto 1fr;
+    gap: 12px;
+    padding: 14px 18px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.25;
+  }
+  .panel-title { font-family: 'Orbitron', sans-serif; font-size: 0.65rem; letter-spacing: 3px; color: var(--dim); margin-bottom: 12px; text-transform: uppercase; }
+
+  /* ── Gauges ── */
+  .gauge-wrap { margin-bottom: 14px; }
+  .gauge-label { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--dim); margin-bottom: 4px; }
+  .gauge-track { height: 7px; background: #141e26; border-radius: 2px; overflow: hidden; }
+  .gauge-fill  { height: 100%; border-radius: 2px; transition: width .5s ease, background .4s; }
+
+  /* ── Rows ── */
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #0f1a22; font-size: 0.8rem; }
+  .row:last-child { border-bottom: none; }
+  .row-label { color: var(--dim); }
+
+  /* ── Badges ── */
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 2px; font-size: 0.72rem; letter-spacing: 2px; font-family: 'Orbitron', sans-serif; }
+  .bg   { background: rgba(0,255,136,0.1); color: var(--green);  border: 1px solid rgba(0,255,136,0.3); }
+  .br   { background: rgba(255,59,59,0.1); color: var(--red);    border: 1px solid rgba(255,59,59,0.3); }
+  .by   { background: rgba(255,214,0,0.08);color: var(--yellow); border: 1px solid rgba(255,214,0,0.3); }
+  .bb   { background: rgba(0,229,255,0.08);color: var(--accent); border: 1px solid rgba(0,229,255,0.3); }
+
+  /* ── Attack buttons ── */
+  #attack-panel { grid-column: 3; grid-row: 1 / 4; }
+
+  .atk-btn {
+    width: 100%; margin-bottom: 9px; padding: 10px 12px;
+    background: #0a1520; border: 1px solid #1a2e3e; border-radius: 3px;
+    color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 0.78rem;
+    cursor: pointer; text-align: left; transition: all .2s; letter-spacing: 1px;
+  }
+  .atk-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,59,59,0.04); }
+  .atk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .atk-name { display: block; font-family: 'Orbitron', sans-serif; font-size: 0.67rem; letter-spacing: 2px; color: var(--red); margin-bottom: 3px; }
+  .atk-desc { font-size: 0.71rem; color: var(--dim); }
+
+  .reset-btn {
+    width: 100%; padding: 10px; background: rgba(0,229,255,0.05);
+    border: 1px solid rgba(0,229,255,0.3); border-radius: 3px;
+    color: var(--accent); font-family: 'Orbitron', sans-serif; font-size: 0.68rem;
+    letter-spacing: 2px; cursor: pointer; margin-bottom: 14px; transition: all .2s;
+  }
+  .reset-btn:hover { background: rgba(0,229,255,0.1); }
+
+  #attack-state { font-size: 0.76rem; color: var(--dim); line-height: 1.8; white-space: pre-line; }
+
+  /* ── Flow diagram ── */
+  #flow-panel { grid-column: 1 / 3; }
+  .flow-svg { width: 100%; height: 165px; }
+
+  /* ── Log ── */
+  #log-panel { grid-column: 1 / 3; }
+  #log-list  { height: 155px; overflow-y: auto; font-size: 0.76rem; line-height: 1.75; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .log-entry { display: flex; gap: 10px; }
+  .log-ts { color: var(--dim); flex-shrink: 0; }
+  .log-info   { color: var(--accent); }
+  .log-normal { color: var(--green); }
+  .log-warn   { color: var(--yellow); }
+  .log-alarm  { color: var(--red); }
+
+  /* ── Modbus registers ── */
+  .reg-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #0f1a22; font-size: 0.77rem; }
+  .reg-row:last-child { border-bottom: none; }
+  .reg-addr { color: var(--accent); min-width: 55px; }
+  .reg-name { color: var(--dim); flex: 1; margin: 0 8px; }
+  .reg-val  { color: var(--text); }
+  .reg-spoofed { color: var(--red); }
+
+  /* ── Thermal ── */
+  .temp-ok   { color: var(--green); }
+  .temp-warn { color: var(--yellow); }
+  .temp-hot  { color: var(--red); }
+
+  @media(max-width:900px) {
+    main { grid-template-columns: 1fr; }
+    #flow-panel, #log-panel { grid-column: 1; }
+    #attack-panel { grid-column: 1; grid-row: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div style="font-size:.62rem;color:var(--dim);letter-spacing:3px;margin-bottom:3px">NAVAL DOCKYARD — EDUCATIONAL SIMULATION ONLY</div>
+    <h1>⚡ SHORE POWER DISTRIBUTION — OT SCADA TESTBED</h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span id="uptime" style="font-size:.72rem;color:var(--dim)">UP: 00:00:00</span>
+    <span id="conn-badge" class="conn-ok">● CONNECTED</span>
+  </div>
+</header>
+
+<div id="status-bar" class="sb-normal">● SYSTEM NORMAL — ALL PARAMETERS WITHIN LIMITS</div>
+
+<div id="consequence-banner">
+  <div class="cons-title" id="cons-title">⚠ CONSEQUENCE</div>
+  <div class="cons-details" id="cons-details"></div>
+  <div class="phase-bar" id="phase-bar"></div>
+</div>
+
+<div id="consequence-banner">
+  <div class="cons-title" id="cons-title"></div>
+  <div class="cons-details" id="cons-details"></div>
+  <div class="phase-bar" id="phase-bar"></div>
+</div>
+
+<main>
+
+  <!-- ── Electrical Parameters ── -->
+  <div class="panel">
+    <div class="panel-title">⚡ Live Electrical Parameters</div>
+
+    <div class="gauge-wrap">
+      <div class="gauge-label"><span>VOLTAGE</span><span id="lbl-v">440 V</span></div>
+      <div class="gauge-track"><div class="gauge-fill" id="g-v" style="width:88%;background:var(--green)"></div></div>
+    </div>
+    <div class="gauge-wrap">
+      <div class="gauge-label"><span>CURRENT</span><span id="lbl-i">60 A</span></div>
+      <div class="gauge-track"><div class="gauge-fill" id="g-i" style="width:60%;background:var(--green)"></div></div>
+    </div>
+    <div class="gauge-wrap">
+      <div class="gauge-label"><span>LOAD</span><span id="lbl-l">26 kW</span></div>
+      <div class="gauge-track"><div class="gauge-fill" id="g-l" style="width:55%;background:var(--accent)"></div></div>
+    </div>
+
+    <div class="row"><span class="row-label">FREQUENCY</span><span id="v-freq">50.00 Hz</span></div>
+    <div class="row"><span class="row-label">POWER FACTOR</span><span id="v-pf">0.92</span></div>
+    <div class="row"><span class="row-label">GRID SOURCE</span><span class="badge bb">11 kV LIVE</span></div>
+  </div>
+
+  <!-- ── Component Status ── -->
+  <div class="panel">
+    <div class="panel-title">🔧 Component Status</div>
+    <div class="row"><span class="row-label">CIRCUIT BREAKER</span>   <span class="badge bg" id="b-breaker">CLOSED</span></div>
+    <div class="row"><span class="row-label">TRANSFORMER</span>       <span class="badge bg" id="b-xfmr">HEALTHY</span></div>
+    <div class="row"><span class="row-label">PROTECTION RELAY</span>  <span class="badge bg" id="b-relay">ARMED</span></div>
+    <div class="row"><span class="row-label">PLC LOGIC</span>         <span class="badge bg" id="b-plc">RUNNING</span></div>
+    <div class="row"><span class="row-label">SHIP CONNECTION</span>   <span class="badge bb" id="b-ship">CONNECTED</span></div>
+    <div class="row"><span class="row-label">MODBUS TCP</span>        <span class="badge bg" id="b-modbus">PORT 5020</span></div>
+
+    <div style="margin-top:14px">
+      <div class="panel-title" style="margin-bottom:8px">🌡 Thermal</div>
+      <div class="row"><span class="row-label">TRANSFORMER TEMP</span><span id="v-temp" class="temp-ok">54°C</span></div>
+      <div class="row"><span class="row-label">CABLE TEMP</span>      <span id="v-ctemp" class="temp-ok">41°C</span></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <button class="reset-btn" style="margin:0;width:100%" onclick="manualBreaker()">
+        ⚡ TOGGLE BREAKER MANUALLY
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Attack Panel ── -->
+  <div class="panel" id="attack-panel">
+    <div class="panel-title">⚠ Cyber Attack Scenarios</div>
+    <div style="font-size:.71rem;color:var(--dim);margin-bottom:12px;line-height:1.6">
+      Academic demo only.<br>Each attack triggers real API calls + Modbus register changes.
+    </div>
+
+    <button class="atk-btn" onclick="sendAttack('spoof')">
+      <span class="atk-name">ATK-01 · SENSOR SPOOFING</span>
+      <span class="atk-desc">Falsify Modbus reg 40002 → relay blinded → overheating</span>
+    </button>
+    <button class="atk-btn" onclick="sendAttack('breaker')">
+      <span class="atk-name">ATK-02 · BREAKER MANIPULATION</span>
+      <span class="atk-desc">Rogue Modbus write coil 00001→0 → ship blackout</span>
+    </button>
+    <button class="atk-btn" onclick="sendAttack('relay')">
+      <span class="atk-name">ATK-03 · RELAY BYPASS</span>
+      <span class="atk-desc">Disable PLC protection logic → unsafe current</span>
+    </button>
+    <button class="atk-btn" onclick="sendAttack('telemetry')">
+      <span class="atk-name">ATK-04 · FALSE TELEMETRY</span>
+      <span class="atk-desc">SCADA reads 440V — actual voltage degrades silently</span>
+    </button>
+    <button class="atk-btn" onclick="sendAttack('overload')">
+      <span class="atk-name">ATK-05 · LOAD SPIKE</span>
+      <span class="atk-desc">Force overcurrent → relay trips → breaker opens</span>
+    </button>
+
+    <button class="reset-btn" onclick="sendReset()">↺ RESET SYSTEM</button>
+
+    <div class="panel-title" style="margin-bottom:8px">📡 Active Scenario</div>
+    <div id="attack-state">No active attack.
+System operating normally.</div>
+  </div>
+
+  <!-- ── Power Flow SVG ── -->
+  <div class="panel" id="flow-panel">
+    <div class="panel-title">🔌 Power Flow</div>
+    <svg class="flow-svg" viewBox="0 0 820 155" id="flow-svg">
+      <!-- Grid -->
+      <rect x="8" y="50" width="88" height="55" rx="3" fill="#0d1e2a" stroke="#1a3a4a" stroke-width="1.5"/>
+      <text x="52" y="72" text-anchor="middle" font-family="Share Tech Mono" font-size="10" fill="#4a6572">GRID</text>
+      <text x="52" y="88" text-anchor="middle" font-family="Orbitron" font-size="11" fill="#00e5ff">11 kV</text>
+      <text x="52" y="100" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#4a6572">SOURCE</text>
+
+      <line x1="96" y1="77" x2="148" y2="77" stroke="#1a3a4a" stroke-width="2"/>
+
+      <!-- Transformer -->
+      <rect x="148" y="47" width="100" height="60" rx="3" fill="#0d1e2a" stroke="#1a3a4a" stroke-width="1.5" id="svg-xfmr"/>
+      <text x="198" y="70" text-anchor="middle" font-family="Share Tech Mono" font-size="10" fill="#4a6572">XFMR</text>
+      <text x="198" y="85" text-anchor="middle" font-family="Orbitron" font-size="10" fill="#00e5ff">11k→440V</text>
+      <text x="198" y="100" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#4a6572" id="svg-xfmr-s">HEALTHY</text>
+
+      <line x1="248" y1="77" x2="298" y2="77" stroke="#1a3a4a" stroke-width="2"/>
+
+      <!-- Breaker -->
+      <rect x="298" y="52" width="80" height="50" rx="3" fill="#0d1e2a" stroke="#1a3a4a" stroke-width="1.5" id="svg-breaker-rect"/>
+      <text x="338" y="73" text-anchor="middle" font-family="Share Tech Mono" font-size="10" fill="#4a6572">BREAKER</text>
+      <text x="338" y="91" text-anchor="middle" font-family="Orbitron" font-size="11" fill="#00ff88" id="svg-breaker-txt">CLOSED</text>
+
+      <line x1="378" y1="77" x2="420" y2="77" stroke="#1a3a4a" stroke-width="2" id="svg-line-b"/>
+
+      <!-- Sensors -->
+      <rect x="420" y="47" width="100" height="60" rx="3" fill="#0d1e2a" stroke="#1a3a4a" stroke-width="1.5"/>
+      <text x="470" y="68" text-anchor="middle" font-family="Share Tech Mono" font-size="10" fill="#4a6572">SENSORS</text>
+      <text x="470" y="83" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#00e5ff" id="svg-sv">V: 440V</text>
+      <text x="470" y="96" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#00e5ff" id="svg-si">I: 60A</text>
+      <text x="470" y="108" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#4a6572" id="svg-spooftag"></text>
+
+      <line x1="520" y1="77" x2="562" y2="77" stroke="#1a3a4a" stroke-width="2" id="svg-line-s"/>
+
+      <!-- PLC/Relay -->
+      <rect x="562" y="45" width="98" height="65" rx="3" fill="#0d1e2a" stroke="#1a3a4a" stroke-width="1.5" id="svg-relay-rect"/>
+      <text x="611" y="66" text-anchor="middle" font-family="Share Tech Mono" font-size="10" fill="#4a6572">PLC/RELAY</text>
+      <text x="611" y="81" text-anchor="middle" font-family="Orbitron" font-size="10" fill="#00ff88" id="svg-relay-txt">ARMED</text>
+      <text x="611" y="95" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#4a6572" id="svg-relay-sub">PROT.ON</text>
+      <text x="611" y="107" text-anchor="middle" font-family="Share Tech Mono" font-size="8" fill="#4a6572" id="svg-relay-thr">THR:100A</text>
+
+      <line x1="660" y1="77" x2="702" y2="77" stroke="#1a3a4a" stroke-width="2" id="svg-line-r"/>
+
+      <!-- Ship -->
+      <rect x="702" y="42" width="110" height="72" rx="3" fill="#0d1418" stroke="#1a3a4a" stroke-width="1.5" id="svg-ship-rect"/>
+      <text x="757" y="65" text-anchor="middle" font-family="Share Tech Mono" font-size="10" fill="#4a6572">SHIP</text>
+      <text x="757" y="81" text-anchor="middle" font-family="Orbitron" font-size="10" fill="#00e5ff" id="svg-ship-txt">POWERED</text>
+      <text x="757" y="95" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#4a6572" id="svg-ship-load">LOAD: 26kW</text>
+      <text x="757" y="108" text-anchor="middle" font-family="Share Tech Mono" font-size="9" fill="#00ff88" id="svg-ship-status">NOMINAL</text>
+
+      <!-- Animated flow dot -->
+      <circle r="4" fill="#00e5ff" opacity="0.85" id="flow-dot">
+        <animateMotion dur="2.2s" repeatCount="indefinite" path="M 96,77 L 700,77"/>
+      </circle>
+    </svg>
+  </div>
+
+  <!-- ── Event Log ── -->
+  <div class="panel" id="log-panel">
+    <div class="panel-title">📋 System Event Log</div>
+    <div id="log-list"></div>
+  </div>
+
+  <!-- ── Modbus Registers ── -->
+  <div class="panel">
+    <div class="panel-title">📡 Modbus Register Map (Port 5020)</div>
+    <div class="reg-row"><span class="reg-addr">40001</span><span class="reg-name">Voltage (V)</span>    <span class="reg-val" id="reg-40001">4400</span></div>
+    <div class="reg-row"><span class="reg-addr">40002</span><span class="reg-name">Current (A)</span>    <span class="reg-val" id="reg-40002">600</span></div>
+    <div class="reg-row"><span class="reg-addr">40003</span><span class="reg-name">Load (kW)</span>      <span class="reg-val" id="reg-40003">260</span></div>
+    <div class="reg-row"><span class="reg-addr">40004</span><span class="reg-name">Temp (°C)</span>     <span class="reg-val" id="reg-40004">540</span></div>
+    <div class="reg-row"><span class="reg-addr">40005</span><span class="reg-name">Freq (Hz×100)</span> <span class="reg-val" id="reg-40005">5000</span></div>
+    <div class="reg-row"><span class="reg-addr">40006</span><span class="reg-name">PF (×100)</span>     <span class="reg-val" id="reg-40006">92</span></div>
+    <div class="reg-row"><span class="reg-addr">00001</span><span class="reg-name">Breaker</span>       <span class="reg-val" id="reg-00001">1 (CLOSED)</span></div>
+    <div class="reg-row"><span class="reg-addr">00002</span><span class="reg-name">Relay</span>         <span class="reg-val" id="reg-00002">1 (ARMED)</span></div>
+    <div class="reg-row"><span class="reg-addr">00003</span><span class="reg-name">Alarm Flag</span>   <span class="reg-val" id="reg-00003">0 (NONE)</span></div>
+  </div>
+
+</main>
+
+<script>
+let _lastLog = [];
+let _state = {};
+let _breakerManual = null;  // null = auto
+
+/* ── API calls ─────────────────────────────────────────── */
+async function fetchState() {
+  try {
+    const r = await fetch('/api/state');
+    _state = await r.json();
+    setConn(true);
+    updateUI(_state);
+  } catch(e) {
+    setConn(false);
+  }
+}
+
+async function fetchLog() {
+  try {
+    const r = await fetch('/api/log?n=60');
+    const entries = await r.json();
+    renderLog(entries);
+  } catch(e) {}
+}
+
+async function sendAttack(type) {
+  await fetch('/api/attack', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({type})
+  });
+  const el = document.getElementById('attack-state');
+  el.innerHTML = '<span style="color:var(--red);font-family:Orbitron,sans-serif;font-size:0.7rem;letter-spacing:2px">' + type.toUpperCase() + ' INITIATED</span><br>Watch the status bar and consequence banner as the attack escalates through phases automatically.';
+  el.style.color = '#c8dde8';
+}
+
+async function sendReset() {
+  await fetch('/api/reset', {method:'POST'});
+  _breakerManual = null;
+  document.getElementById('attack-state').innerHTML = 'No active attack.<br>System operating normally.';
+  document.getElementById('attack-state').style.color = '';
+}
+
+async function manualBreaker() {
+  const newState = !_state.breaker_closed;
+  await fetch('/api/breaker', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({state: newState})
+  });
+}
+
+/* ── UI helpers ────────────────────────────────────────── */
+function setConn(ok) {
+  const el = document.getElementById('conn-badge');
+  el.textContent = ok ? '● CONNECTED' : '● OFFLINE';
+  el.className = ok ? 'conn-ok' : 'conn-err';
+}
+
+function setGauge(gId, lblId, val, max, label, color) {
+  const pct = Math.min(100, Math.max(0, (val / max) * 100));
+  document.getElementById(gId).style.width = pct + '%';
+  document.getElementById(gId).style.background = color;
+  document.getElementById(lblId).textContent = label;
+}
+
+function colorClass(val, warn, hot) {
+  return val < warn ? 'temp-ok' : val < hot ? 'temp-warn' : 'temp-hot';
+}
+
+function setBadge(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'badge ' + cls;
+}
+
+function fmtUptime(s) {
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `UP: ${h}:${m}:${ss}`;
+}
+
+/* ── Main UI update ────────────────────────────────────── */
+function updateUI(s) {
+  // Uptime
+  document.getElementById('uptime').textContent = fmtUptime(s.uptime || 0);
+
+  // Gauges
+  const dv = s.display_voltage, di = s.display_current;
+  const vColor = dv > 420 ? 'var(--green)' : dv > 380 ? 'var(--yellow)' : 'var(--red)';
+  const iColor = di < 80  ? 'var(--green)' : di < 100 ? 'var(--yellow)' : 'var(--red)';
+  setGauge('g-v', 'lbl-v', dv, 520, dv.toFixed(0)+' V', vColor);
+  setGauge('g-i', 'lbl-i', di, 165, di.toFixed(0)+' A', iColor);
+  setGauge('g-l', 'lbl-l', s.load, 80, s.load.toFixed(1)+' kW', 'var(--accent)');
+
+  document.getElementById('v-freq').textContent = (s.freq||50).toFixed(2)+' Hz';
+  document.getElementById('v-pf').textContent   = (s.pf||0.92).toFixed(2);
+
+  // Thermal
+  const te = document.getElementById('v-temp');
+  te.textContent = s.temp.toFixed(0)+'°C';
+  te.className = colorClass(s.temp, 65, 80);
+
+  const ce = document.getElementById('v-ctemp');
+  ce.textContent = s.ctemp.toFixed(0)+'°C';
+  ce.className = colorClass(s.ctemp, 55, 70);
+
+  // Breaker
+  setBadge('b-breaker', s.breaker_closed ? 'CLOSED':'OPEN', s.breaker_closed ? 'bg':'br');
+  setBadge('b-xfmr', s.temp > 85 ? 'OVERHEATING':'HEALTHY', s.temp > 85 ? 'br':'bg');
+  setBadge('b-relay', s.relay_armed ? (s.attack_mode==='relay'?'BYPASSED':'ARMED'):'TRIPPED',
+           s.relay_armed ? (s.attack_mode==='relay'?'br':'bg'):'by');
+  setBadge('b-plc', s.attack_mode==='relay'?'DISABLED':'RUNNING', s.attack_mode==='relay'?'br':'bg');
+  setBadge('b-ship', s.breaker_closed?'CONNECTED':'BLACKOUT', s.breaker_closed?'bb':'br');
+
+  // SVG updates
+  const bClosed = s.breaker_closed;
+  const btxt = document.getElementById('svg-breaker-txt');
+  const brect = document.getElementById('svg-breaker-rect');
+  btxt.textContent = bClosed ? 'CLOSED':'OPEN';
+  btxt.setAttribute('fill', bClosed ? '#00ff88':'#ff3b3b');
+  brect.setAttribute('stroke', bClosed ? '#1a3a4a':'#ff3b3b');
+
+  // Ship
+  const stxt = document.getElementById('svg-ship-txt');
+  const srect = document.getElementById('svg-ship-rect');
+  stxt.textContent = bClosed ? 'POWERED':'BLACKOUT';
+  stxt.setAttribute('fill', bClosed ? '#00e5ff':'#ff3b3b');
+  srect.setAttribute('stroke', bClosed ? '#00e5ff':'#ff3b3b');
+  document.getElementById('svg-ship-load').textContent = 'LOAD: '+s.load.toFixed(1)+'kW';
+  document.getElementById('svg-ship-status').textContent = s.alarm ? 'ALARM':'NOMINAL';
+  document.getElementById('svg-ship-status').setAttribute('fill', s.alarm ? '#ff3b3b':'#00ff88');
+
+  // Flow dot
+  document.getElementById('flow-dot').style.display = bClosed ? '':'none';
+
+  // Sensor SVG
+  const svEl = document.getElementById('svg-sv');
+  const siEl = document.getElementById('svg-si');
+  const stEl = document.getElementById('svg-spooftag');
+  if (s.spoofed) {
+    siEl.textContent = `I: ${di.toFixed(0)}A`;
+    siEl.setAttribute('fill','#ff3b3b');
+    stEl.textContent = '[SPOOFED]';
+    stEl.setAttribute('fill','#ff3b3b');
+  } else if (s.false_telemetry) {
+    svEl.textContent = `V: ${dv.toFixed(0)}V`;
+    svEl.setAttribute('fill','#ff3b3b');
+    stEl.textContent = '[FAKE]';
+    stEl.setAttribute('fill','#ff3b3b');
+    siEl.setAttribute('fill','#00e5ff');
+  } else {
+    svEl.textContent = `V: ${dv.toFixed(0)}V`;
+    svEl.setAttribute('fill','#00e5ff');
+    siEl.textContent = `I: ${di.toFixed(0)}A`;
+    siEl.setAttribute('fill','#00e5ff');
+    stEl.textContent = '';
+  }
+
+  // Relay SVG
+  const relayArmed = s.relay_armed;
+  const bypassed   = s.attack_mode === 'relay';
+  const rTxt = document.getElementById('svg-relay-txt');
+  const rRect = document.getElementById('svg-relay-rect');
+  rTxt.textContent = bypassed ? 'BYPASSED' : relayArmed ? 'ARMED':'TRIPPED';
+  rTxt.setAttribute('fill', bypassed ? '#ff3b3b' : relayArmed ? '#00ff88':'#ffd600');
+  rRect.setAttribute('stroke', bypassed ? '#ff3b3b' : relayArmed ? '#1a3a4a':'#ffd600');
+  document.getElementById('svg-relay-sub').textContent = bypassed ? 'PROT.OFF':'PROT.ON';
+
+  // Modbus registers
+  document.getElementById('reg-40001').textContent = (dv*10).toFixed(0);
+  const reg02 = document.getElementById('reg-40002');
+  reg02.textContent = (di*10).toFixed(0);
+  reg02.className = s.spoofed ? 'reg-val reg-spoofed':'reg-val';
+  document.getElementById('reg-40003').textContent = (s.load*10).toFixed(0);
+  document.getElementById('reg-40004').textContent = (s.temp*10).toFixed(0);
+  document.getElementById('reg-40005').textContent = ((s.freq||50)*100).toFixed(0);
+  document.getElementById('reg-40006').textContent = ((s.pf||0.92)*100).toFixed(0);
+  document.getElementById('reg-00001').textContent = bClosed ? '1 (CLOSED)':'0 (OPEN)';
+  document.getElementById('reg-00002').textContent = s.relay_armed ? '1 (ARMED)':'0 (TRIP/BYP)';
+  document.getElementById('reg-00003').textContent = s.alarm ? '1 (ALARM)':'0 (NONE)';
+
+  // ── Status bar ──────────────────────────────────────────────
+  const sb = document.getElementById('status-bar');
+  const phaseLabels = {
+    normal:      '● SYSTEM NORMAL — ALL PARAMETERS WITHIN LIMITS',
+    escalating:  '⚠ ATTACK ESCALATING — ANOMALY DETECTED',
+    critical:    '🔴 CRITICAL STATE — IMMINENT CONSEQUENCE',
+    deceiving:   '⚠ TELEMETRY COMPROMISED — SILENT DEGRADATION',
+    degrading:   '🔴 SYSTEM DEGRADING — OPERATOR UNAWARE',
+    spiking:     '⚠ OVERCURRENT BUILDING — RELAY RESPONDING',
+    blackout:    '🚨 SHIP BLACKOUT — POWER LOST',
+    shutdown:    '🚨 EMERGENCY SHUTDOWN — THERMAL PROTECTION ACTIVATED',
+    lockout:     '🚨 SYSTEM LOCKOUT — EQUIPMENT DAMAGE',
+    collapse:    '🚨 VOLTAGE COLLAPSE — PROTECTIVE TRIP',
+    tripped:     '⚡ RELAY TRIPPED — EQUIPMENT PROTECTED',
+    consequence: '🚨 CONSEQUENCE STATE — RESET REQUIRED',
+  };
+  if (s.phase && s.phase !== 'normal') {
+    const alarmPhases = ['shutdown','blackout','lockout','collapse','consequence'];
+    sb.className = alarmPhases.includes(s.phase) ? 'sb-alarm' : 'sb-warning';
+    sb.textContent = phaseLabels[s.phase] || '⚠ ATTACK IN PROGRESS';
+  } else {
+    sb.className = 'sb-normal';
+    sb.textContent = phaseLabels.normal;
+  }
+
+  // ── Consequence banner ───────────────────────────────────────
+  updateConsequenceBanner(s);
+}
+
+/* ── Consequence data ───────────────────────────────────────── */
+const CONSEQUENCES = {
+  THERMAL_SHUTDOWN: {
+    title: '🚨 CONSEQUENCE: EMERGENCY THERMAL SHUTDOWN',
+    protected: false,
+    details: [
+      '<span><span class="cons-tag cons-dmg">DAMAGE</span> Transformer winding insulation degraded &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">OFFLINE</span> Shore power circuit offline &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">IMPACT</span> Ship mission capability: LOST &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">ROOT CAUSE</span> Attacker masked overcurrent via sensor spoofing &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">RECOVERY</span> Transformer inspection + cooldown required (4–8h) &nbsp;</span>',
+    ],
+    phases: ['Sensor Spoofed','Current Rising','Overheat','Shutdown'],
+  },
+  SHIP_BLACKOUT: {
+    title: '🚨 CONSEQUENCE: COMPLETE SHIP BLACKOUT',
+    protected: false,
+    details: [
+      '<span><span class="cons-tag cons-dmg">OFFLINE</span> Navigation systems offline &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">OFFLINE</span> Communication systems offline &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">IMPACT</span> Operational mission capability: ZERO &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">ROOT CAUSE</span> Unauthorised Modbus write to breaker coil 00001 &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">RECOVERY</span> Manual investigation then breaker reset required &nbsp;</span>',
+    ],
+    phases: ['Modbus Write','Breaker Open','Blackout','Cascade'],
+  },
+  EQUIPMENT_DAMAGE: {
+    title: '🚨 CONSEQUENCE: EQUIPMENT DAMAGE + SYSTEM LOCKOUT',
+    protected: false,
+    details: [
+      '<span><span class="cons-tag cons-dmg">DAMAGE</span> Shore cable insulation failure (simulated) &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">LOCKED</span> System locked out — manual inspection required &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">IMPACT</span> Estimated downtime: 48 hours &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">ROOT CAUSE</span> Protection relay disabled — overcurrent unchecked &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">RECOVERY</span> Cable replacement + relay recertification required &nbsp;</span>',
+    ],
+    phases: ['Relay Bypassed','Overcurrent','Cable Overheat','Lockout'],
+  },
+  VOLTAGE_COLLAPSE: {
+    title: '🚨 CONSEQUENCE: VOLTAGE COLLAPSE — DELAYED DETECTION',
+    protected: false,
+    details: [
+      '<span><span class="cons-tag cons-dmg">CORRUPTED</span> Ship radar: corrupted data from undervoltage &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">DAMAGE</span> Motor drives: damaged by sustained low voltage &nbsp;</span>',
+      '<span><span class="cons-tag cons-dmg">IMPACT</span> SCADA integrity COMPROMISED — operator deceived &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">ROOT CAUSE</span> False telemetry hid 80V drop for 16+ ticks &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">RECOVERY</span> Equipment inspection + SCADA audit required &nbsp;</span>',
+    ],
+    phases: ['Telemetry Faked','Voltage Drops','Degradation','Collapse'],
+  },
+  RELAY_TRIP_PROTECTION: {
+    title: '⚡ PROTECTION ACTIVATED — CONTROLLED SHUTDOWN',
+    protected: true,
+    details: [
+      '<span><span class="cons-tag cons-ok">PROTECTED</span> Relay tripped in &lt;100ms — equipment safe &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">OFFLINE</span> Shore power interrupted — ship on battery backup &nbsp;</span>',
+      '<span><span class="cons-tag cons-ok">OUTCOME</span> No equipment damage — protection worked correctly &nbsp;</span>',
+      '<span><span class="cons-tag cons-warn">ROOT CAUSE</span> Injected load spike exceeded 100A threshold &nbsp;</span>',
+      '<span><span class="cons-tag cons-ok">RECOVERY</span> Fault cleared — system ready to reset &nbsp;</span>',
+    ],
+    phases: ['Load Spike','Overcurrent','Relay Trip','Safe Isolation'],
+  },
+};
+
+function updateConsequenceBanner(s) {
+  const banner  = document.getElementById('consequence-banner');
+  const consData = s.consequence ? CONSEQUENCES[s.consequence] : null;
+  if (!consData) { banner.className = ''; return; }
+
+  banner.className = consData.protected ? 'visible relay-trip' : 'visible';
+
+  const titleEl = document.getElementById('cons-title');
+  titleEl.textContent = consData.title;
+  titleEl.className   = consData.protected ? 'cons-title protected' : 'cons-title';
+
+  document.getElementById('cons-details').innerHTML = consData.details.join('');
+
+  const phases = consData.phases;
+  const pBar   = document.getElementById('phase-bar');
+  const pipClass = consData.protected ? 'phase-pip done ok' : 'phase-pip done';
+  pBar.innerHTML = 'ATTACK PHASES: &nbsp;' + phases.map((p, i) =>
+    '<div class="' + pipClass + '" title="' + p + '"></div>' +
+    '<span style="color:var(--text)">' + p + '</span>'
+  ).join(' &rarr; ');
+}
+
+/* ── Log rendering ──────────────────────────────────────── */
+function renderLog(entries) {
+  const list = document.getElementById('log-list');
+  list.innerHTML = '';
+  entries.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<span class="log-ts">${e.ts}</span><span class="log-${e.level}">${e.msg}</span>`;
+    list.appendChild(div);
+  });
+}
+
+/* ── Polling ────────────────────────────────────────────── */
+setInterval(fetchState, 900);
+setInterval(fetchLog, 1500);
+fetchState();
+fetchLog();
+</script>
+</body>
+</html>
