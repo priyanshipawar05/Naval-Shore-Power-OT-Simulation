@@ -1,5 +1,3 @@
-# Shore Power OT Lab — BTech Major Project
-
 ## Naval Dockyard Shore Power Distribution System — OT Cybersecurity Simulation
 
 > **Educational Simulation Only — Not a real naval system.**
