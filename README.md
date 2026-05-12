@@ -1,117 +1,256 @@
-## Naval Dockyard Shore Power Distribution System — OT Cybersecurity Simulation
+# Naval Shore Power Distribution OT Simulation
 
-> **Educational Simulation Only — Not a real naval system.**
-
----
-
-## What This Is
-
-A full-stack OT (Operational Technology) cybersecurity testbed that simulates a naval dockyard shore power distribution system. It runs a real Modbus TCP server alongside a Flask web server with a live SCADA dashboard.
-
-You can trigger cyber attack scenarios and watch them affect:
-- Modbus registers in real time
-- The SCADA dashboard
-- Protection relay and breaker behavior
-- Thermal and electrical parameters
+> Educational OT/ICS cybersecurity simulation of a naval shore power distribution system using OpenPLC v3, Modbus TCP, Python Flask, and a custom SCADA HMI.
 
 ---
 
-## Stack
+## Overview
 
-```
+This project simulates a cyber-physical Operational Technology (OT) environment representing a naval shore-to-ship power distribution system.
+
+The simulation demonstrates how insecure industrial communication protocols such as Modbus TCP can be exploited to perform cyber-physical attacks against critical infrastructure systems.
+
+The project integrates:
+- OpenPLC v3 runtime
+- Modbus TCP communication
+- Flask backend APIs
+- Custom SCADA/HMI dashboard
+- PLC ladder logic
+- Real-time attack simulation
+- Cyber-physical consequence modeling
+
+The system visualizes electrical parameters, breaker states, relay logic, event logs, thermal behavior, and live attack impact in real time.
+
+---
+
+# Features
+
+- Real-time SCADA dashboard
+- OpenPLC-based PLC simulation
+- Modbus TCP integration
+- Live electrical parameter monitoring
+- Custom attack execution panel
+- Simulated cyber-physical consequences
+- REST API for control and monitoring
+- Real-time event logging
+- OT attack scenario visualization
+- Cyber Kill Chain inspired escalation model
+
+---
+
+# Environment
+
+The project was developed on a Windows host system using WSL Ubuntu for OpenPLC runtime execution.
+
+## Environment Stack
+
+- Windows 11
+- WSL Ubuntu 22.04
+- OpenPLC v3
+- Python 3.11
+- Flask
+- pymodbus
+
+---
+
+# Project Structure
+
+```text
 shore-power-lab/
-├── app.py               Flask server + simulation engine
-├── modbus_server.py     Modbus TCP server (pymodbus)
+│
+├── attack_scripts/
+│   ├── atk01_sensor_spoof.py
+│   ├── atk02_breaker_manipulation.py
+│   ├── atk03_relay_bypass.py
+│   ├── atk04_false_telemetry.py
+│   ├── atk05_load_spike.py
+│   └── reset_plc.py
+│
+├── openplc/
+│   ├── shore_power.st
+│   └── SETUP_GUIDE.md
+│
 ├── templates/
-│   └── index.html       SCADA dashboard (polls Flask API)
-└── requirements.txt
+│   └── shore_power_scada.html
+│
+├── screenshots/
+│
+├── docs/
+│
+├── app.py
+├── modbus_bridge.py
+├── modbus_server.py
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## Setup
+# System Architecture
 
-### 1. Install dependencies
+```text
+SCADA Dashboard (HTML/CSS/JS)
+              ↓
+        Flask Backend API
+              ↓
+         Modbus TCP
+              ↓
+       OpenPLC Runtime
+              ↓
+          PLC Logic
+              ↓
+  Simulated Shore Power System
+```
+
+---
+
+# Simulated OT Attack Scenarios
+
+| Attack Scenario | Technique | Simulated Impact |
+|---|---|---|
+| Sensor Spoofing | Register manipulation | Thermal shutdown |
+| Breaker Manipulation | Unauthorized Modbus coil write | Ship blackout |
+| Relay Bypass | PLC protection logic tampering | Equipment damage |
+| False Telemetry Injection | SCADA deception | Voltage collapse |
+| Load Spike Attack | Overcurrent injection | Relay trip / isolation |
+
+---
+
+# Real-World Inspiration
+
+The simulated attack scenarios are inspired by major industrial cyber incidents including:
+
+- Stuxnet (2010)
+- Industroyer / CrashOverride (2016)
+
+The project demonstrates how unauthenticated industrial protocols can enable cyber-physical attacks against critical infrastructure.
+
+---
+
+# Modbus TCP Security Findings
+
+The simulation demonstrates several inherent weaknesses of Modbus TCP:
+
+- No authentication
+- No encryption
+- No access control
+- Direct register manipulation possible
+- PLC protection logic bypass achievable
+- False telemetry can deceive operators
+
+A single unauthorized Modbus connection can manipulate PLC behavior and trigger physical process impact.
+
+---
+
+# OpenPLC Setup (WSL Ubuntu)
+
+## Install OpenPLC
+
+Inside WSL Ubuntu:
+
+```bash
+git clone https://github.com/thiagoralves/OpenPLC_v3.git
+cd OpenPLC_v3
+./install.sh linux
+```
+
+---
+
+## Start OpenPLC Runtime
+
+```bash
+cd ~/OpenPLC_v3/webserver
+python3 webserver.py
+```
+
+---
+
+## Access OpenPLC
+
+```text
+http://localhost:8080
+```
+
+---
+
+## Load PLC Program
+
+Upload:
+
+```text
+openplc/shore_power.st
+```
+
+Then start the runtime from the OpenPLC dashboard.
+
+---
+
+# Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/Naval-Shore-Power-OT-Simulation.git
+cd Naval-Shore-Power-OT-Simulation
+```
+
+---
+
+## Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Run
+---
+
+## Start Application
+
 ```bash
 python app.py
 ```
 
-### 3. Open dashboard
-```
+---
+
+## Access Dashboard
+
+```text
 http://localhost:5000
 ```
 
-### 4. (Optional) Connect a real Modbus client
-```
-Host: localhost
-Port: 5020
-```
-Tools you can use: **ModScan32**, **QModMaster**, or your own pymodbus script.
-
 ---
 
-## REST API
+# REST API
 
-| Method | Endpoint       | Body / Params               | Description            |
-|--------|---------------|-----------------------------|------------------------|
-| GET    | /api/state    | —                           | Full system state JSON |
-| GET    | /api/log      | ?n=60                       | Last N log entries     |
-| POST   | /api/attack   | {"type": "spoof"}           | Trigger attack         |
-| POST   | /api/reset    | —                           | Reset to nominal       |
-| POST   | /api/breaker  | {"state": true}             | Manual breaker toggle  |
-
-### Attack types
-| Type        | Effect                                                     |
-|-------------|-----------------------------------------------------------|
-| `spoof`     | Falsify current sensor → relay blinded → overheating      |
-| `breaker`   | Force breaker OPEN via Modbus write → ship blackout       |
-| `relay`     | Bypass protection relay → unsafe current allowed          |
-| `telemetry` | SCADA shows 440V while actual voltage degrades silently   |
-| `overload`  | Inject load spike → relay trips → breaker opens           |
-
----
-
-## Modbus Register Map
-
-### Holding Registers (FC03, values ×10 or ×100)
-| Address | Register | Description              | Scale |
-|---------|----------|--------------------------|-------|
-| 0       | 40001    | Voltage (V)              | ×10   |
-| 1       | 40002    | Current (A)              | ×10   |
-| 2       | 40003    | Load (kW)                | ×10   |
-| 3       | 40004    | Transformer Temp (°C)    | ×10   |
-| 4       | 40005    | Frequency (Hz)           | ×100  |
-| 5       | 40006    | Power Factor             | ×100  |
-
-### Coils (FC01 read / FC05 write)
-| Address | Coil  | Description   | Values          |
-|---------|-------|---------------|-----------------|
-| 0       | 00001 | Breaker State | 1=CLOSED 0=OPEN |
-| 1       | 00002 | Relay Armed   | 1=ARMED 0=OFF   |
-| 2       | 00003 | Alarm Flag    | 1=ALARM 0=NONE  |
-
----
-
-## Physics Model
-
-```
-Load (kW)  = Voltage × Current / 1000
-Current    = Load / Voltage          (simplified)
-Relay trip = Current > 100A         (overcurrent threshold)
-```
-
-Sensor spoofing: register 40002 is written with current × 0.3 (fake low value).
-The real internal current continues to rise — relay gets the fake value.
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/state` | Retrieve full system state |
+| GET | `/api/log` | Retrieve event logs |
+| POST | `/api/attack` | Trigger attack scenario |
+| POST | `/api/reset` | Reset system |
+| POST | `/api/breaker` | Toggle breaker state |
 
 ---
 
 
-## Disclaimer
-This is an academic educational simulation.
-It does not model any real naval installation, dockyard, or classified system.
-All data is synthetic and randomly generated.
+# Educational Objectives
+
+This project was developed to:
+- Study OT/ICS cybersecurity concepts
+- Demonstrate cyber-physical attack impact
+- Explore insecure industrial protocols
+- Simulate SCADA/PLC environments
+- Understand operator deception techniques
+- Analyze Modbus TCP vulnerabilities
+
+---
+
+
+
+# Disclaimer
+
+This project was developed strictly for educational and cybersecurity research purposes.
+
+It does not represent any real naval infrastructure, operational environment, or classified system.
+
+All data, architectures, and simulations are synthetic and intended solely for controlled laboratory demonstration and academic research.
