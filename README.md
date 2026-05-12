@@ -71,7 +71,7 @@ shore-power-lab/
 │   └── SETUP_GUIDE.md
 │
 ├── templates/
-│   └── shore_power_scada.html
+│   └── index.html
 │
 ├── screenshots/
 │
@@ -81,6 +81,8 @@ shore-power-lab/
 ├── modbus_bridge.py
 ├── modbus_server.py
 ├── requirements.txt
+├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
